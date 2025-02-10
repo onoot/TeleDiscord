@@ -1,0 +1,185 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: messenger-api-routes
+  namespace: messenger
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Path(`/api/v1/users/health`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: user-service
+          port: 80
+
+    - match: PathPrefix(`/api/v1/users`)
+      kind: Rule
+      priority: 90
+      services:
+        - name: user-service
+          port: 80
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/api/v1/messages`)
+      kind: Rule
+      services:
+        - name: message-service
+          port: 3000
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/api/v1/calls`)
+      kind: Rule
+      services:
+        - name: call-service
+          port: 80
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/api/v1/servers`)
+      kind: Rule
+      services:
+        - name: channel-service
+          port: 80
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/api/v1/notifications`)
+      kind: Rule
+      services:
+        - name: notification-service
+          port: 3000
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/api/docs`)
+      kind: Rule
+      services:
+        - name: swagger-service
+          port: 80
+      middlewares:
+        - name: strip-prefix-swagger
+        - name: cors-headers
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: messenger-websocket-routes
+  namespace: messenger
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: PathPrefix(`/ws/messages`)
+      kind: Rule
+      services:
+        - name: message-service
+          port: 3001
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/ws/calls`)
+      kind: Rule
+      services:
+        - name: call-service
+          port: 3001
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/ws/channels`)
+      kind: Rule
+      services:
+        - name: channel-service
+          port: 3001
+      middlewares:
+        - name: cors-headers
+
+    - match: PathPrefix(`/ws/notifications`)
+      kind: Rule
+      services:
+        - name: notification-service
+          port: 3001
+      middlewares:
+        - name: cors-headers
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: cors-headers
+  namespace: messenger
+spec:
+  headers:
+    accessControlAllowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    accessControlAllowHeaders:
+      - "*"
+    accessControlAllowOriginList:
+      - "*"
+    accessControlMaxAge: 86400
+    addVaryHeader: true
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-prefix-swagger
+  namespace: messenger
+spec:
+  stripPrefix:
+    prefixes:
+      - /api/docs
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: messenger
+spec:
+  entryPoints:
+    - dashboard
+  routes:
+    - match: PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: api@internal
+          kind: TraefikService
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: message-service-route
+  namespace: messenger
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: PathPrefix(`/api/v1/messages`)
+      kind: Rule
+      services:
+        - name: message-service
+          port: 3000
+      middlewares:
+        - name: cors-headers
+    - match: PathPrefix(`/ws/messages`)
+      kind: Rule
+      services:
+        - name: message-service
+          port: 3001
+      middlewares:
+        - name: cors-headers 

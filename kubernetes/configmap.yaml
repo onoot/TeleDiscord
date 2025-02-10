@@ -1,0 +1,307 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: message-service-config
+  namespace: messenger
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  MONGODB_URI: "mongodb://host.docker.internal:27017/messenger"
+  REDIS_HOST: "host.docker.internal"
+  REDIS_PORT: "6379"
+  KAFKA_BROKERS: "kafka-service.default.svc.cluster.local:9092"
+  KAFKA_SSL: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: messenger
+data:
+  POSTGRES_HOST: "bexapaskey.beget.app:5432"
+  POSTGRES_DB: "default_db"
+  NODE_ENV: "production"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swagger-config
+  namespace: messenger
+data:
+  channel-service.yaml: |
+    openapi: 3.0.3
+    info:
+      title: Channel Service API
+      version: 1.0.1
+      description: API для управления каналами и группами
+    servers:
+      - url: /api/v1
+        description: API сервиса каналов
+    paths:
+      /servers:
+        post:
+          tags:
+            - Каналы v1
+          summary: Создать новый сервер (группу)
+          security:
+            - BearerAuth: []
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Название сервера
+                    description:
+                      type: string
+                      description: Описание сервера
+                    icon:
+                      type: string
+                      description: URL иконки сервера
+          responses:
+            '201':
+              description: Сервер успешно создан
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Server'
+      /servers/my:
+        get:
+          tags:
+            - Каналы v1
+          summary: Получить список серверов пользователя
+          security:
+            - BearerAuth: []
+          responses:
+            '200':
+              description: Список серверов
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Server'
+      /servers/{serverId}:
+        get:
+          tags:
+            - Каналы v1
+          summary: Получить информацию о сервере
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: serverId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          responses:
+            '200':
+              description: Информация о сервере
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Server'
+      /servers/{serverId}/channels:
+        post:
+          tags:
+            - Каналы v1
+          summary: Создать новый канал
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: serverId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Название канала
+                    type:
+                      type: string
+                      enum: [text, voice]
+                      description: Тип канала
+                    description:
+                      type: string
+                      description: Описание канала
+                    isPrivate:
+                      type: boolean
+                      description: Является ли канал приватным
+          responses:
+            '201':
+              description: Канал успешно создан
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Channel'
+      /servers/{serverId}/channels/{channelId}/call:
+        post:
+          tags:
+            - Каналы v1
+          summary: Управление звонком в голосовом канале
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: serverId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+            - name: channelId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    action:
+                      type: string
+                      enum: [join, leave]
+                      description: Действие со звонком
+          responses:
+            '200':
+              description: Операция успешно выполнена
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Channel'
+    components:
+      securitySchemes:
+        BearerAuth:
+          type: http
+          scheme: bearer
+          bearerFormat: JWT
+      schemas:
+        Server:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            description:
+              type: string
+            icon:
+              type: string
+            creatorId:
+              type: string
+              format: uuid
+            channels:
+              type: array
+              items:
+                $ref: '#/components/schemas/Channel'
+            roles:
+              type: array
+              items:
+                $ref: '#/components/schemas/Role'
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        Channel:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            description:
+              type: string
+            type:
+              type: string
+              enum: [text, voice]
+            serverId:
+              type: string
+              format: uuid
+            isPrivate:
+              type: boolean
+            activeCall:
+              type: object
+              nullable: true
+              properties:
+                participants:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                startTime:
+                  type: string
+                  format: date-time
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        Role:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            color:
+              type: string
+            serverId:
+              type: string
+              format: uuid
+            permissions:
+              type: array
+              items:
+                type: string
+                enum:
+                  - manage_server
+                  - manage_channels
+                  - manage_roles
+                  - manage_messages
+                  - send_messages
+                  - read_messages
+                  - connect
+                  - speak
+                  - video
+                  - mention_everyone
+                  - add_reactions
+            isDefault:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        User:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string 

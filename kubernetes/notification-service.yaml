@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: messenger
+data:
+  PORT: "3000"
+  KAFKA_BROKER: "kafka:9092"
+  MONGODB_URI: "mongodb://mongodb-service:27017/notifications"
+  CORS_ORIGIN: "*"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-service-secrets
+  namespace: messenger
+type: Opaque
+data:
+  JWT_SECRET: "c2VjcmV0LWtleS1mb3Itbm90aWZpY2F0aW9uLXNlcnZpY2U=" # base64 encoded
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: messenger
+  labels:
+    app: notification-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: notification-service
+        image: docer2-notification-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+        - containerPort: 3001
+          name: ws
+        env:
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: PORT
+        - name: KAFKA_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: KAFKA_BROKER
+        - name: MONGODB_URI
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: MONGODB_URI
+        - name: CORS_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: CORS_ORIGIN
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: JWT_SECRET
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: messenger
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+    - name: ws
+      port: 3001
+      targetPort: ws
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: notification-service-ingress
+  namespace: messenger
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/websocket-services: "notification-service"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/notifications
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              name: http
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              name: ws
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: notification-service-hpa
+  namespace: messenger
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: notification-service
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80 

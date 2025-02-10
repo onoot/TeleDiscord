@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lb-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lb-monitor
+  template:
+    metadata:
+      labels:
+        app: lb-monitor
+    spec:
+      serviceAccountName: lb-monitor
+      containers:
+      - name: lb-monitor
+        image: docer2-lb-monitor:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        env:
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: REDIS_PORT
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: REDIS_URL
+        - name: REDIS_CACHE_TTL
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: REDIS_CACHE_TTL
+        - name: UPDATE_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: lb-monitor-config
+              key: UPDATE_INTERVAL

@@ -1,0 +1,1524 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swagger-config
+  namespace: messenger
+data:
+  user-service.yaml: |
+    openapi: 3.0.3
+    info:
+      title: User Service API
+      version: 1.0.1
+      description: API сервиса управления пользователями
+    servers:
+      - url: /api/v1/users
+        description: API сервиса пользователей
+    tags:
+      - name: Пользователи v1
+        description: Методы для работы с пользователями
+    paths:
+      /api/v1/users/health:
+        get:
+          tags:
+            - Пользователи v1
+          summary: Проверка работоспособности сервиса
+          responses:
+            '200':
+              description: Сервис работает
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: "ok"
+      /api/v1/users/register:
+        post:
+          tags:
+            - Пользователи v1
+          summary: Регистрация нового пользователя
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - username
+                    - email
+                    - password
+                  properties:
+                    username:
+                      type: string
+                      minLength: 3
+                      maxLength: 30
+                    email:
+                      type: string
+                      format: email
+                    password:
+                      type: string
+                      format: password
+                      minLength: 8
+                    settings:
+                      type: object
+                      properties:
+                        notifications:
+                          type: boolean
+                        theme:
+                          type: string
+                          enum: [light, dark]
+                        language:
+                          type: string
+          responses:
+            '201':
+              description: Пользователь успешно зарегистрирован
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/AuthResponse'
+      /api/v1/users/login:
+        post:
+          tags:
+            - Пользователи v1
+          summary: Вход в систему
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - email
+                    - password
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                    password:
+                      type: string
+                      format: password
+          responses:
+            '200':
+              description: Успешная авторизация
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/AuthResponse'
+      /api/v1/users/profile:
+        get:
+          tags:
+            - Пользователи v1
+          summary: Получение профиля пользователя
+          security:
+            - BearerAuth: []
+          responses:
+            '200':
+              description: Профиль пользователя
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/UserProfile'
+        put:
+          tags:
+            - Пользователи v1
+          summary: Обновление профиля
+          security:
+            - BearerAuth: []
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    username:
+                      type: string
+                    email:
+                      type: string
+                      format: email
+                    avatar:
+                      type: string
+                    settings:
+                      type: object
+                      properties:
+                        notifications:
+                          type: boolean
+                        theme:
+                          type: string
+                          enum: [light, dark]
+                        language:
+                          type: string
+          responses:
+            '200':
+              description: Профиль обновлен
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/UserProfile'
+    components:
+      securitySchemes:
+        BearerAuth:
+          type: http
+          scheme: bearer
+          bearerFormat: JWT
+      schemas:
+        AuthResponse:
+          type: object
+          properties:
+            token:
+              type: string
+            user:
+              $ref: '#/components/schemas/UserProfile'
+        UserProfile:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+            email:
+              type: string
+            avatar:
+              type: string
+            status:
+              type: string
+              enum: [online, offline]
+            settings:
+              type: object
+              properties:
+                notifications:
+                  type: boolean
+                theme:
+                  type: string
+                  enum: [light, dark]
+                language:
+                  type: string
+  message-service.yaml: |
+    openapi: 3.0.3
+    info:
+      title: Message Service API
+      version: 1.0.1
+      description: API сервиса сообщений
+    servers:
+      - url: /api/v1/messages
+        description: API сервиса сообщений
+    tags:
+      - name: Сообщения v1
+        description: Методы для работы с сообщениями
+    paths:
+      /api/v1/messages/dialogs/{userId}:
+        get:
+          tags:
+            - Сообщения v1
+          summary: Получить сообщения диалога
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: userId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID пользователя, с которым ведется диалог
+            - name: page
+              in: query
+              required: false
+              schema:
+                type: integer
+                default: 1
+              description: Номер страницы
+            - name: limit
+              in: query
+              required: false
+              schema:
+                type: integer
+                default: 50
+              description: Количество сообщений на странице
+          responses:
+            '200':
+              description: Список сообщений
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      messages:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Message'
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          total:
+                            type: integer
+                          hasMore:
+                            type: boolean
+        post:
+          tags:
+            - Сообщения v1
+          summary: Отправить личное сообщение
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: userId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID получателя сообщения
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/SendMessageRequest'
+          responses:
+            '201':
+              description: Сообщение отправлено
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Message'
+      /api/v1/messages/channels/{channelId}:
+        get:
+          tags:
+            - Сообщения v1
+          summary: Получить сообщения канала
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: channelId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID канала
+            - name: page
+              in: query
+              required: false
+              schema:
+                type: integer
+                default: 1
+              description: Номер страницы
+            - name: limit
+              in: query
+              required: false
+              schema:
+                type: integer
+                default: 50
+              description: Количество сообщений на странице
+          responses:
+            '200':
+              description: Список сообщений канала
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      messages:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Message'
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          total:
+                            type: integer
+                          hasMore:
+                            type: boolean
+        post:
+          tags:
+            - Сообщения v1
+          summary: Отправить сообщение в канал
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: channelId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID канала
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/SendMessageRequest'
+          responses:
+            '201':
+              description: Сообщение отправлено
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Message'
+      /api/v1/messages/{messageId}/read:
+        post:
+          tags:
+            - Сообщения v1
+          summary: Отметить сообщение как прочитанное
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: messageId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сообщения
+          responses:
+            '200':
+              description: Сообщение отмечено как прочитанное
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+      /api/v1/messages/{messageId}:
+        put:
+          tags:
+            - Сообщения v1
+          summary: Редактировать сообщение
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: messageId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сообщения
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/EditMessageRequest'
+          responses:
+            '200':
+              description: Сообщение отредактировано
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Message'
+      /api/v1/messages/{messageId}/delete:
+        post:
+          tags:
+            - Сообщения v1
+          summary: Удалить сообщение
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: messageId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сообщения
+          responses:
+            '200':
+              description: Сообщение удалено
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+      /api/v1/messages/{messageId}/reactions:
+        post:
+          tags:
+            - Сообщения v1
+          summary: Добавить реакцию к сообщению
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: messageId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сообщения
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/AddReactionRequest'
+          responses:
+            '200':
+              description: Реакция добавлена
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Message'
+        get:
+          tags:
+            - Сообщения v1
+          summary: Получить реакции сообщения
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: messageId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сообщения
+          responses:
+            '200':
+              description: Список реакций
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reaction'
+      /api/v1/messages/{messageId}/reactions/{emoji}/delete:
+        post:
+          tags:
+            - Сообщения v1
+          summary: Удалить реакцию с сообщения
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: messageId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сообщения
+            - name: emoji
+              in: path
+              required: true
+              schema:
+                type: string
+              description: Эмодзи реакции
+          responses:
+            '200':
+              description: Реакция удалена
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Message'
+    components:
+      securitySchemes:
+        BearerAuth:
+          type: http
+          scheme: bearer
+          bearerFormat: JWT
+      responses:
+        BadRequest:
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid request parameters"
+        Unauthorized:
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authentication required"
+        Forbidden:
+          description: Доступ запрещен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access denied"
+        NotFound:
+          description: Ресурс не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Resource not found"
+      schemas:
+        Message:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            content:
+              type: string
+            attachments:
+              type: array
+              items:
+                type: string
+            replyToId:
+              type: string
+              format: uuid
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        SendMessageRequest:
+          type: object
+          required:
+            - content
+          properties:
+            content:
+              type: string
+              description: Текст сообщения
+            attachments:
+              type: array
+              items:
+                type: string
+              description: Массив URL-ов вложений
+            replyToId:
+              type: string
+              format: uuid
+              nullable: true
+              description: ID сообщения, на которое отвечаем
+        EditMessageRequest:
+          type: object
+          required:
+            - content
+          properties:
+            content:
+              type: string
+              description: Новый текст сообщения
+            attachments:
+              type: array
+              items:
+                type: string
+              description: Обновленный массив URL-ов вложений
+            replyToId:
+              type: string
+              format: uuid
+              nullable: true
+              description: ID сообщения, на которое отвечаем
+        AddReactionRequest:
+          type: object
+          required:
+            - emoji
+          properties:
+            emoji:
+              type: string
+              description: Эмодзи реакции
+        Reaction:
+          type: object
+          properties:
+            userId:
+              type: string
+              format: uuid
+            emoji:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+  call-service.yaml: |
+    openapi: 3.0.3
+    info:
+      title: Call Service API
+      version: 1.0.1
+      description: API сервиса видео и аудио звонков
+    servers:
+      - url: /api/v1/calls
+        description: API сервиса звонков
+    tags:
+      - name: Звонки v1
+        description: Методы для работы с видео и аудио звонками
+    paths:
+      /api/v1/calls:
+        post:
+          tags:
+            - Звонки v1
+          summary: Инициировать звонок
+          security:
+            - BearerAuth: []
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - receiverId
+                    - type
+                  properties:
+                    receiverId:
+                      type: string
+                      format: uuid
+                      description: ID пользователя, которому звоним
+                    type:
+                      type: string
+                      enum: [audio, video]
+                      description: Тип звонка
+          responses:
+            '200':
+              description: Звонок инициирован
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Call'
+            '400':
+              description: Некорректный запрос
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Failed to initiate call"
+            '401':
+              description: Требуется авторизация
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Authentication required"
+
+      /api/v1/calls/{callId}/accept:
+        post:
+          tags:
+            - Звонки v1
+          summary: Принять входящий звонок
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: callId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID звонка
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - sdpAnswer
+                  properties:
+                    sdpAnswer:
+                      type: string
+                      description: SDP ответ для WebRTC соединения
+          responses:
+            '200':
+              description: Звонок принят
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Call'
+            '400':
+              description: Некорректный запрос
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Failed to accept call"
+            '403':
+              description: Нет прав на принятие звонка
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Not authorized to accept this call"
+
+      /api/v1/calls/{callId}/reject:
+        post:
+          tags:
+            - Звонки v1
+          summary: Отклонить входящий звонок
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: callId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID звонка
+          responses:
+            '200':
+              description: Звонок отклонен
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Call'
+            '403':
+              description: Нет прав на отклонение звонка
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Not authorized to reject this call"
+
+      /api/v1/calls/{callId}/end:
+        post:
+          tags:
+            - Звонки v1
+          summary: Завершить текущий звонок
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: callId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID звонка
+          responses:
+            '200':
+              description: Звонок завершен
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Call'
+            '403':
+              description: Нет прав на завершение звонка
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Not authorized to end this call"
+
+      /api/v1/calls/{callId}/ice-candidates:
+        post:
+          tags:
+            - Звонки v1
+          summary: Обновить ICE кандидатов для WebRTC соединения
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: callId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID звонка
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - candidates
+                  properties:
+                    candidates:
+                      type: array
+                      items:
+                        type: string
+                      description: Список ICE кандидатов
+          responses:
+            '200':
+              description: ICE кандидаты обновлены
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Call'
+            '403':
+              description: Нет прав на обновление звонка
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Not authorized to update this call"
+
+      /api/v1/calls/history:
+        get:
+          tags:
+            - Звонки v1
+          summary: Получить историю звонков
+          security:
+            - BearerAuth: []
+          responses:
+            '200':
+              description: История звонков
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Call'
+
+      /api/v1/calls/active:
+        get:
+          tags:
+            - Звонки v1
+          summary: Получить информацию о текущем активном звонке
+          security:
+            - BearerAuth: []
+          responses:
+            '200':
+              description: Информация об активном звонке
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Call'
+
+    components:
+      securitySchemes:
+        BearerAuth:
+          type: http
+          scheme: bearer
+          bearerFormat: JWT
+      schemas:
+        Call:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            callerId:
+              type: string
+              format: uuid
+              description: ID пользователя, который инициировал звонок
+            receiverId:
+              type: string
+              format: uuid
+              description: ID пользователя, которому звонят
+            type:
+              type: string
+              enum: [audio, video]
+              description: Тип звонка
+            status:
+              type: string
+              enum: [initiated, ringing, connected, ended, missed, rejected]
+              description: Статус звонка
+            startTime:
+              type: string
+              format: date-time
+              description: Время начала звонка
+            endTime:
+              type: string
+              format: date-time
+              description: Время завершения звонка
+            duration:
+              type: integer
+              description: Длительность звонка в секундах
+            metadata:
+              type: object
+              properties:
+                iceServers:
+                  type: array
+                  items:
+                    type: string
+                sdpOffer:
+                  type: string
+                sdpAnswer:
+                  type: string
+                iceCandidates:
+                  type: array
+                  items:
+                    type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+  channel-service.yaml: |
+    openapi: 3.0.3
+    info:
+      title: Channel Service API
+      version: 1.0.1
+      description: API сервиса управления каналами и серверами
+    servers:
+      - url: /api/v1/servers
+        description: API сервиса каналов
+    tags:
+      - name: Каналы v1
+        description: Методы для работы с каналами и серверами
+    paths:
+      /api/v1/servers:
+        post:
+          tags:
+            - Каналы v1
+          summary: Создать новый сервер
+          security:
+            - BearerAuth: []
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Название сервера
+                    description:
+                      type: string
+                      description: Описание сервера
+                    icon:
+                      type: string
+                      description: URL иконки сервера
+          responses:
+            '201':
+              description: Сервер успешно создан
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Server'
+      /api/v1/servers/my:
+        get:
+          tags:
+            - Каналы v1
+          summary: Получить список серверов пользователя
+          security:
+            - BearerAuth: []
+          responses:
+            '200':
+              description: Список серверов
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Server'
+      /api/v1/servers/{serverId}:
+        get:
+          tags:
+            - Каналы v1
+          summary: Получить информацию о сервере
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: serverId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          responses:
+            '200':
+              description: Информация о сервере
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Server'
+      /api/v1/servers/{serverId}/channels:
+        post:
+          tags:
+            - Каналы v1
+          summary: Создать новый канал
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: serverId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Название канала
+                    type:
+                      type: string
+                      enum: [text, voice]
+                      description: Тип канала
+                    description:
+                      type: string
+                      description: Описание канала
+                    isPrivate:
+                      type: boolean
+                      description: Приватный ли канал
+          responses:
+            '201':
+              description: Канал успешно создан
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Channel'
+      /api/v1/servers/{serverId}/channels/{channelId}/call:
+        post:
+          tags:
+            - Каналы v1
+          summary: Управление звонком в канале
+          security:
+            - BearerAuth: []
+          parameters:
+            - name: serverId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID сервера
+            - name: channelId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+              description: ID канала
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - action
+                  properties:
+                    action:
+                      type: string
+                      enum: [join, leave]
+                      description: Действие со звонком (присоединиться/покинуть)
+          responses:
+            '200':
+              description: Операция успешно выполнена
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      channelId:
+                        type: string
+                        format: uuid
+                      participants:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                      startTime:
+                        type: string
+                        format: date-time
+            '403':
+              description: Нет прав для выполнения операции
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Недостаточно прав для выполнения операции"
+            '404':
+              description: Канал не найден
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: "Канал не найден"
+    components:
+      schemas:
+        Server:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            description:
+              type: string
+            icon:
+              type: string
+            creatorId:
+              type: string
+              format: uuid
+            channels:
+              type: array
+              items:
+                $ref: '#/components/schemas/Channel'
+            roles:
+              type: array
+              items:
+                $ref: '#/components/schemas/Role'
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        Channel:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            description:
+              type: string
+            type:
+              type: string
+              enum: [text, voice]
+            serverId:
+              type: string
+              format: uuid
+            isPrivate:
+              type: boolean
+            activeCall:
+              type: object
+              properties:
+                participants:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                startTime:
+                  type: string
+                  format: date-time
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        Role:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            color:
+              type: string
+            serverId:
+              type: string
+              format: uuid
+            permissions:
+              type: array
+              items:
+                type: string
+                enum:
+                  - manage_server
+                  - manage_channels
+                  - manage_roles
+                  - manage_messages
+                  - send_messages
+                  - read_messages
+                  - connect
+                  - speak
+                  - video
+                  - mention_everyone
+                  - add_reactions
+            isDefault:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        User:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+            email:
+              type: string
+            avatar:
+              type: string
+            status:
+              type: string
+              enum: [online, offline]
+            settings:
+              type: object
+              properties:
+                notifications:
+                  type: boolean
+                theme:
+                  type: string
+                  enum: [light, dark]
+                language:
+                  type: string
+        SendMessageRequest:
+          type: object
+          required:
+            - content
+          properties:
+            content:
+              type: string
+              description: Текст сообщения
+            attachments:
+              type: array
+              items:
+                type: string
+              description: Массив URL-ов вложений
+            replyToId:
+              type: string
+              format: uuid
+              nullable: true
+              description: ID сообщения, на которое отвечаем
+        EditMessageRequest:
+          type: object
+          required:
+            - content
+          properties:
+            content:
+              type: string
+              description: Новый текст сообщения
+            attachments:
+              type: array
+              items:
+                type: string
+              description: Обновленный список URL вложений
+            replyToId:
+              type: string
+              format: uuid
+              nullable: true
+              description: ID сообщения, на которое отвечаем
+        AddReactionRequest:
+          type: object
+          required:
+            - emoji
+          properties:
+            emoji:
+              type: string
+              description: Эмодзи реакции
+              example: "👍"
+        Reaction:
+          type: object
+          properties:
+            userId:
+              type: string
+              format: uuid
+              description: ID пользователя
+            emoji:
+              type: string
+              description: Эмодзи реакции
+            createdAt:
+              type: string
+              format: date-time
+        Pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              description: Текущая страница
+            limit:
+              type: integer
+              description: Количество элементов на странице
+            total:
+              type: integer
+              description: Общее количество элементов
+            hasMore:
+              type: boolean 
+              description: Есть ли следующая страница 
+  notification-service.yaml: |
+    openapi: 3.0.3
+    info:
+      title: Notification Service API
+      version: 1.0.1
+      description: API сервиса уведомлений
+    servers:
+      - url: /api/v1/notifications
+        description: API сервиса уведомлений
+    paths:
+      /api/v1/notifications:
+        get:
+          tags:
+            - Уведомления v1
+          summary: Получить список уведомлений
+          description: Возвращает список уведомлений для текущего пользователя
+          security:
+            - bearerAuth: []
+          parameters:
+            - name: lastNotificationId
+              in: query
+              description: ID последнего полученного уведомления
+              required: false
+              schema:
+                type: string
+          responses:
+            '200':
+              description: Список уведомлений
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/MessageNotification'
+                        - $ref: '#/components/schemas/CallNotification'
+                        - $ref: '#/components/schemas/ChannelNotification'
+                        - $ref: '#/components/schemas/FriendRequestNotification'
+            '401':
+              description: Не авторизован
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Error'
+      
+      /api/v1/notifications/poll:
+        get:
+          tags:
+            - Уведомления v1
+          summary: Получить непрочитанные уведомления
+          description: Возвращает список непрочитанных уведомлений для текущего пользователя
+          security:
+            - bearerAuth: []
+          responses:
+            '200':
+              description: Список непрочитанных уведомлений
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/MessageNotification'
+                        - $ref: '#/components/schemas/CallNotification'
+                        - $ref: '#/components/schemas/ChannelNotification'
+                        - $ref: '#/components/schemas/FriendRequestNotification'
+            '401':
+              description: Не авторизован
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Error'
+      
+      /api/v1/notifications/read:
+        post:
+          tags:
+            - Уведомления v1
+          summary: Отметить уведомления как прочитанные
+          description: Отмечает указанные уведомления как прочитанные
+          security:
+            - bearerAuth: []
+          parameters:
+            - name: notificationIds
+              in: body
+              description: ID уведомлений
+              required: true
+              schema:
+                type: array
+                items:
+                  type: string
+          responses:
+            '200':
+              description: Уведомления отмечены как прочитанные
+            '401':
+              description: Не авторизован
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Error'
+            '404':
+              description: Уведомления не найдены
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Error'
+      
+      /api/v1/notifications/unread/count:
+        get:
+          tags:
+            - Уведомления v1
+          summary: Получить количество непрочитанных уведомлений
+          description: Возвращает количество непрочитанных уведомлений для текущего пользователя
+          security:
+            - bearerAuth: []
+          responses:
+            '200':
+              description: Количество непрочитанных уведомлений
+              content:
+                application/json:
+                  schema:
+                    type: integer
+            '401':
+              description: Не авторизован
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/Error'
+
+      /health:
+        get:
+          summary: Проверка работоспособности
+          description: Проверяет работоспособность сервиса
+          responses:
+            '200':
+              description: Сервис работает нормально
+            '503':
+              description: Сервис недоступен
+      
+      /ready:
+        get:
+          summary: Проверка готовности
+          description: Проверяет готовность сервиса к обработке запросов
+          responses:
+            '200':
+              description: Сервис готов к работе
+            '503':
+              description: Сервис не готов 

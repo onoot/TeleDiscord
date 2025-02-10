@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.2.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secrets
+              key: admin-user
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secrets
+              key: admin-password
+        - name: GF_AUTH_DISABLE_LOGIN_FORM
+          value: "false"
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+          value: "Admin"
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboards-config
+          mountPath: /etc/grafana/provisioning/dashboards
+        - name: call-service-dashboard
+          mountPath: /var/lib/grafana/dashboards/call-service
+        - name: channel-service-dashboard
+          mountPath: /var/lib/grafana/dashboards/channel-service
+        - name: message-service-dashboard
+          mountPath: /var/lib/grafana/dashboards/message-service
+        - name: media-service-dashboard
+          mountPath: /var/lib/grafana/dashboards/media-service
+        - name: notification-service-dashboard
+          mountPath: /var/lib/grafana/dashboards/notification-service
+        - name: user-service-dashboard
+          mountPath: /var/lib/grafana/dashboards/user-service
+      volumes:
+      - name: grafana-storage
+        emptyDir: {}
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-dashboards-config
+        configMap:
+          name: grafana-dashboards-config
+      - name: call-service-dashboard
+        configMap:
+          name: call-service-dashboard
+      - name: channel-service-dashboard
+        configMap:
+          name: channel-service-dashboard
+      - name: message-service-dashboard
+        configMap:
+          name: message-service-dashboard
+      - name: media-service-dashboard
+        configMap:
+          name: media-service-dashboard
+      - name: notification-service-dashboard
+        configMap:
+          name: notification-service-dashboard
+      - name: user-service-dashboard
+        configMap:
+          name: user-service-dashboard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP 

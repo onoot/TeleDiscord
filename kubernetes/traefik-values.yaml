@@ -1,0 +1,38 @@
+additionalArguments:
+  - "--api.dashboard=true"
+  - "--api.insecure=true"
+  - "--providers.kubernetesingress=true"
+  - "--providers.kubernetesingress.ingressclass=traefik"
+  - "--entrypoints.web.address=:80"
+  - "--entrypoints.websecure.address=:443"
+  - "--log.level=INFO"
+
+ports:
+  web:
+    port: 80
+    expose: true
+    exposedPort: 80
+    protocol: TCP
+  websecure:
+    port: 443
+    expose: true
+    exposedPort: 443
+    protocol: TCP
+
+service:
+  type: LoadBalancer
+
+dashboard:
+  enabled: true
+  domain: traefik.localhost
+
+ingressRoute:
+  dashboard:
+    enabled: true
+
+providers:
+  kubernetesIngress:
+    enabled: true
+    namespaces: []
+    publishedService:
+      enabled: false 
