@@ -82,7 +82,7 @@ export class UserController {
       });
 
       if (existingUser) {
-        return response.status(201).json({
+        return response.status(401).json({
           status: 401,
           message: "Неверный email или пароль"
         });
@@ -99,6 +99,7 @@ export class UserController {
       const user = await UserModel.create({
         ...userData,
         password: hashedPassword,
+        emailVerified: false,
         settings: {
           ...defaultSettings,
           ...(userData.settings || {})
@@ -160,7 +161,7 @@ export class UserController {
       const user = await UserModel.findOne({ email: credentials.email });
       
       if (!user) {
-        return response.status(201).json({
+        return response.status(401).json({
           status: 401,
           message: "Неверный email или пароль"
         });
@@ -168,7 +169,7 @@ export class UserController {
 
       const isValidPassword = await UserModel.comparePassword(user, credentials.password);
       if (!isValidPassword) {
-        return response.status(201).json({
+        return response.status(401).json({
           status: 401,
           message: "Неверный email или пароль"
         });
@@ -593,6 +594,285 @@ export class UserController {
     } catch (error: unknown) {
       const errorWithMessage = this.toErrorWithMessage(error);
       throw new Error(`Failed to get friends: ${errorWithMessage.message}`);
+    }
+  }
+
+  @Post('/forgot-password')
+  @HttpCode(200)
+  async forgotPassword(
+    @Body() data: { email: string },
+    @Res() response: Response
+  ) {
+    try {
+      const user = await UserModel.findOne({ email: data.email });
+      
+      if (!user) {
+        return response.status(404).json({
+          status: 404,
+          message: "Пользователь с таким email не найден"
+        });
+      }
+
+      // Генерируем код восстановления
+      const resetCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const resetCodeExpires = new Date(Date.now() + 3600000); // 1 час
+
+      // Сохраняем код в Redis
+      await this.redisClient.setex(
+        `reset:${user.id}`,
+        3600,
+        JSON.stringify({ code: resetCode, expires: resetCodeExpires })
+      );
+
+      // Отправляем событие в Kafka для отправки email
+      await this.kafkaProducer.send({
+        topic: 'password-reset-requested',
+        messages: [{
+          value: JSON.stringify({
+            userId: user.id,
+            email: user.email,
+            resetCode,
+            expires: resetCodeExpires
+          })
+        }]
+      });
+
+      return {
+        message: "Инструкции по восстановлению пароля отправлены на ваш email"
+      };
+    } catch (error) {
+      console.error('Password reset request error:', error);
+      return response.status(500).json({
+        status: 500,
+        message: "Ошибка при обработке запроса на восстановление пароля"
+      });
+    }
+  }
+
+  @Post('/reset-password')
+  @HttpCode(200)
+  async resetPassword(
+    @Body() data: { email: string; code: string; newPassword: string },
+    @Res() response: Response
+  ) {
+    try {
+      const user = await UserModel.findOne({ email: data.email });
+      
+      if (!user) {
+        return response.status(404).json({
+          status: 404,
+          message: "Пользователь с таким email не найден"
+        });
+      }
+
+      // Проверяем код восстановления
+      const resetData = await this.redisClient.get(`reset:${user.id}`);
+      if (!resetData) {
+        return response.status(400).json({
+          status: 400,
+          message: "Код восстановления недействителен или истек"
+        });
+      }
+
+      const { code, expires } = JSON.parse(resetData);
+      if (code !== data.code || new Date() > new Date(expires)) {
+        return response.status(400).json({
+          status: 400,
+          message: "Код восстановления недействителен или истек"
+        });
+      }
+
+      // Обновляем пароль
+      const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+      await UserModel.save({
+        ...user,
+        password: hashedPassword
+      });
+
+      // Удаляем код восстановления
+      await this.redisClient.del(`reset:${user.id}`);
+
+      // Отправляем событие в Kafka
+      await this.kafkaProducer.send({
+        topic: 'password-reset-completed',
+        messages: [{
+          value: JSON.stringify({
+            userId: user.id,
+            email: user.email
+          })
+        }]
+      });
+
+      return {
+        message: "Пароль успешно изменен"
+      };
+    } catch (error) {
+      console.error('Password reset error:', error);
+      return response.status(500).json({
+        status: 500,
+        message: "Ошибка при сбросе пароля"
+      });
+    }
+  }
+
+  @Post('/verify-email')
+  async verifyEmail(
+    @Body() data: { email: string; action: 1 | 2; code?: string },
+    @Res() response: Response
+  ) {
+    try {
+      const user = await UserModel.findOne({ email: data.email });
+      
+      if (!user) {
+        return response.status(404).json({
+          status: 404,
+          message: "Пользователь не найден"
+        });
+      }
+
+      if (data.action === 1) {
+        // Генерируем код верификации
+        const verificationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        // Сохраняем код в Redis с временем жизни 15 минут
+        await this.redisClient.setex(
+          `verify:${user.id}`,
+          900,
+          verificationCode
+        );
+
+        // В реальном приложении здесь будет отправка email
+        // await this.kafkaProducer.send({
+        //   topic: 'email-verification',
+        //   messages: [{
+        //     value: JSON.stringify({
+        //       userId: user.id,
+        //       email: user.email,
+        //       code: verificationCode
+        //     })
+        //   }]
+        // });
+
+        return response.status(200).json({
+          message: "Код верификации отправлен"
+        });
+      } else {
+        if (!data.code) {
+          return response.status(400).json({
+            status: 400,
+            message: "Не указан код верификации"
+          });
+        }
+
+        // Проверяем код верификации
+        const storedCode = await this.redisClient.get(`verify:${user.id}`);
+        if (!storedCode || storedCode !== data.code) {
+          return response.status(400).json({
+            status: 400,
+            message: "Неверный код верификации"
+          });
+        }
+
+        // Отмечаем email как подтвержденный
+        await UserModel.save({
+          ...user,
+          emailVerified: true
+        });
+
+        // Удаляем код верификации
+        await this.redisClient.del(`verify:${user.id}`);
+
+        return response.status(200).json({
+          message: "Email успешно подтвержден"
+        });
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      return response.status(500).json({
+        status: 500,
+        message: "Ошибка при верификации email"
+      });
+    }
+  }
+
+  @Post('/password-recovery')
+  async passwordRecovery(
+    @Body() data: { email: string; action: 1 | 2; code?: string; newPassword?: string },
+    @Res() response: Response
+  ) {
+    try {
+      const user = await UserModel.findOne({ email: data.email });
+      
+      if (!user) {
+        return response.status(404).json({
+          status: 404,
+          message: "Пользователь не найден"
+        });
+      }
+
+      if (data.action === 1) {
+        // Генерируем код восстановления
+        const recoveryCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        // Сохраняем код в Redis с временем жизни 15 минут
+        await this.redisClient.setex(
+          `recovery:${user.id}`,
+          900,
+          recoveryCode
+        );
+
+        // В реальном приложении здесь будет отправка email
+        // await this.kafkaProducer.send({
+        //   topic: 'password-recovery',
+        //   messages: [{
+        //     value: JSON.stringify({
+        //       userId: user.id,
+        //       email: user.email,
+        //       code: recoveryCode
+        //     })
+        //   }]
+        // });
+
+        return response.status(200).json({
+          message: "Код восстановления отправлен"
+        });
+      } else {
+        if (!data.code || !data.newPassword) {
+          return response.status(400).json({
+            status: 400,
+            message: "Не указан код восстановления или новый пароль"
+          });
+        }
+
+        // Проверяем код восстановления
+        const storedCode = await this.redisClient.get(`recovery:${user.id}`);
+        if (!storedCode || storedCode !== data.code) {
+          return response.status(400).json({
+            status: 400,
+            message: "Неверный код восстановления"
+          });
+        }
+
+        // Обновляем пароль
+        const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+        await UserModel.save({
+          ...user,
+          password: hashedPassword
+        });
+
+        // Удаляем код восстановления
+        await this.redisClient.del(`recovery:${user.id}`);
+
+        return response.status(200).json({
+          message: "Пароль успешно изменен"
+        });
+      }
+    } catch (error) {
+      console.error('Password recovery error:', error);
+      return response.status(500).json({
+        status: 500,
+        message: "Ошибка при восстановлении пароля"
+      });
     }
   }
 } 

@@ -15,8 +15,9 @@ export interface User {
     password: string;
     avatar?: string;
     status: 'online' | 'offline';
-    lastSeen: Date;
+    emailVerified: boolean;
     settings: UserSettings;
+    lastSeen?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
