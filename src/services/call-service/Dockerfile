@@ -16,8 +16,9 @@ COPY tsconfig.json ./
 # Устанавливаем все зависимости
 RUN npm install
 
-# Копируем исходный код
+# Копируем исходный код и конфигурацию
 COPY src ./src
+COPY config ./config
 
 # Собираем TypeScript
 RUN npm run build
@@ -44,6 +45,7 @@ RUN npm install --omit=dev
 
 # Копируем собранные файлы из предыдущего этапа
 COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/config ./config
 
 # Определяем порт, который будет прослушивать приложение
 EXPOSE 3000
