@@ -4,8 +4,6 @@ dist
 .git
 .gitignore
 *.md
-.env
-.env.*
 coverage
 .vscode
 .idea

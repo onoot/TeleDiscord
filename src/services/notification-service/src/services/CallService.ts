@@ -6,12 +6,11 @@ import { KafkaProducer } from '../kafka/producer';
 import { v4 as uuidv4 } from 'uuid';
 
 export class CallService {
-  private callRepository: Repository<Call>;
+  private calls: Call[] = [];
   private io: SocketServer;
   private kafkaProducer: KafkaProducer;
 
-  constructor(dataSource: DataSource, io: SocketServer) {
-    this.callRepository = dataSource.getRepository(Call);
+  constructor(io: SocketServer) {
     this.io = io;
     this.kafkaProducer = new KafkaProducer();
     this.initialize();
@@ -22,8 +21,8 @@ export class CallService {
   }
 
   async initiateCall(callerId: string, receiverId: string, type: CallType, channelId?: string, serverId?: string): Promise<Call> {
-    // Создаем запись в PostgreSQL для активного звонка
-    const call = this.callRepository.create({
+    const call: Call = {
+      id: uuidv4(),
       callerId,
       receiverId,
       type,
@@ -33,8 +32,9 @@ export class CallService {
         channelId,
         serverId
       }
-    });
-    await this.callRepository.save(call);
+    };
+    
+    this.calls.push(call);
 
     // Создаем запись в MongoDB для истории
     await CallRecord.create({
@@ -57,23 +57,22 @@ export class CallService {
   }
 
   async acceptCall(callId: string, sdpAnswer: string): Promise<Call> {
-    const call = await this.callRepository.findOne({ where: { id: callId } });
+    const call = this.calls.find(c => c.id === callId);
     if (!call) {
       throw new Error('Call not found');
     }
 
-    call.status = CallStatus.CONNECTED;
+    call.status = CallStatus.ACCEPTED;
     call.metadata = {
       ...call.metadata,
       sdpAnswer
     };
-    await this.callRepository.save(call);
 
     // Обновляем запись в MongoDB
     await CallRecord.findOneAndUpdate(
       { callId },
       { 
-        status: CallStatus.CONNECTED,
+        status: CallStatus.ACCEPTED,
         'metadata.sdpAnswer': sdpAnswer
       }
     );
@@ -84,7 +83,7 @@ export class CallService {
   }
 
   async endCall(callId: string): Promise<Call> {
-    const call = await this.callRepository.findOne({ where: { id: callId } });
+    const call = this.calls.find(c => c.id === callId);
     if (!call) {
       throw new Error('Call not found');
     }
@@ -92,7 +91,9 @@ export class CallService {
     call.status = CallStatus.ENDED;
     call.endTime = new Date();
     call.duration = call.endTime.getTime() - call.startTime.getTime();
-    await this.callRepository.save(call);
+
+    // Удаляем звонок из активных
+    this.calls = this.calls.filter(c => c.id !== callId);
 
     // Обновляем запись в MongoDB
     await CallRecord.findOneAndUpdate(
@@ -121,11 +122,9 @@ export class CallService {
   }
 
   async getActiveCall(userId: string): Promise<Call | null> {
-    return this.callRepository.findOne({
-      where: [
-        { callerId: userId, status: CallStatus.CONNECTED },
-        { receiverId: userId, status: CallStatus.CONNECTED }
-      ]
-    });
+    return this.calls.find(
+      call => (call.callerId === userId || call.receiverId === userId) && 
+              call.status === CallStatus.ACCEPTED
+    ) || null;
   }
 }

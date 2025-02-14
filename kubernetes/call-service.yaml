@@ -210,7 +210,4 @@ spec:
       policies:
       - type: Pods
         value: 1
-        periodSeconds: 60
-error:
-          type: string
-                    example: "Failed to initiate call" 
+        periodSeconds: 60 

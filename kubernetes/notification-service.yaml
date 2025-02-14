@@ -5,8 +5,8 @@ metadata:
   namespace: messenger
 data:
   PORT: "3000"
-  KAFKA_BROKER: "kafka:9092"
-  MONGODB_URI: "mongodb://mongodb-service:27017/notifications"
+  KAFKA_BROKER: "kafka-service:9092"
+  MONGODB_URI: "mongodb+srv://ZvpXGDfmi40585GS:ZvpXGDfmi40585GS@cluster0.rb6yi.mongodb.net/notifications?retryWrites=true&w=majority"
   CORS_ORIGIN: "*"
 ---
 apiVersion: v1

@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # Загрузка переменных окружения
-source .env.gcp
+if [ -f .env.gcp ]; then
+  source .env.gcp
+else
+  echo "Error: .env.gcp file not found!"
+  exit 1
+fi
 
 # Проверка авторизации в gcloud
 if ! gcloud auth list 2>/dev/null | grep -q "ACTIVE"; then
@@ -9,51 +14,44 @@ if ! gcloud auth list 2>/dev/null | grep -q "ACTIVE"; then
     exit 1
 fi
 
-# Установка проекта по умолчанию
+# Настройка проекта
 gcloud config set project $PROJECT_ID
 
-# Создание кластера GKE
-echo "Creating GKE cluster..."
-gcloud container clusters create $CLUSTER_NAME \
-    --region $REGION \
-    --cluster-version $CLUSTER_VERSION \
-    --machine-type $MACHINE_TYPE \
-    --num-nodes $NUM_NODES \
-    --min-nodes $MIN_NODES \
-    --max-nodes $MAX_NODES \
-    --enable-autoscaling \
-    --network $NETWORK \
-    --subnetwork $SUBNETWORK \
-    --cluster-ipv4-cidr $CLUSTER_IPV4_CIDR \
-    --services-ipv4-cidr $SERVICES_IPV4_CIDR \
-    --enable-ip-alias \
-    --enable-master-authorized-networks \
-    --enable-autorepair \
-    --enable-autoupgrade \
-    --enable-network-policy \
-    --enable-stackdriver-kubernetes \
-    --enable-shielded-nodes \
-    --enable-binauthz \
-    --workload-pool=$PROJECT_ID.svc.id.goog
-
 # Получение учетных данных для kubectl
-gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
+echo "Fetching cluster credentials..."
+gcloud container clusters get-credentials $CLUSTER_NAME --zone $ZONE --project $PROJECT_ID
+
+# Проверка соединения с кластером
+kubectl cluster-info || { echo "Error: Unable to connect to the cluster."; exit 1; }
 
 # Создание namespace
-kubectl create namespace messenger
+echo "Creating namespace 'messenger'..."
+kubectl create namespace messenger || true  # Игнорируем ошибку, если namespace уже существует
 
 # Создание секрета для доступа к Container Registry
-kubectl create secret docker-registry gcr-json-key \
-    --docker-server=$REGISTRY_HOST \
-    --docker-username=_json_key \
-    --docker-password="$(cat key.json)" \
-    --docker-email=your-email@example.com \
-    -n messenger
+echo "Creating secret for Container Registry..."
+if [ -f key.json ]; then
+    kubectl create secret docker-registry gcr-json-key \
+        --docker-server=https://gcr.io \
+        --docker-username=_json_key \
+        --docker-password="$(cat key.json)" \
+        --docker-email=your-email@example.com \
+        -n messenger || true  # Игнорируем ошибку, если секрет уже существует
+else
+    echo "Error: File 'key.json' not found. Please ensure it exists in the current directory."
+    exit 1
+fi
 
 # Настройка RBAC для Traefik
+echo "Setting up RBAC for Traefik..."
 kubectl create clusterrolebinding cluster-admin-binding \
     --clusterrole=cluster-admin \
-    --user=$(gcloud config get-value account)
+    --user=$(gcloud config get-value account) || true  # Игнорируем ошибку, если роль уже существует
 
+# Включение Vertical Pod Autoscaler (VPA)
+echo "Enabling Vertical Pod Autoscaler (VPA)..."
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/vertical-pod-autoscaler/deploy/manifests/vpa-recommended.yaml || true
+
+# Вывод завершающего сообщения
 echo "GKE cluster setup completed!"
-echo "Now you can run ./deploy-to-gke.sh to deploy your services" 
+echo "Now you can run ./deploy-to-gke.sh to deploy your services"

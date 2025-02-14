@@ -2,6 +2,42 @@ import { Kafka, Consumer, Producer } from 'kafkajs';
 import { NotificationStore } from './notification.store';
 import { NotificationType, Notification } from '../types/notification.types';
 import { logger } from '../utils/logger';
+import { randomUUID } from 'crypto';
+
+interface BaseNotificationData {
+  type: 'message' | 'call' | 'channel';
+}
+
+interface MessageNotificationData extends BaseNotificationData {
+  type: 'message';
+  messageId: string;
+  senderId: string;
+  recipientId: string;
+  content: string;
+  channelId?: string;
+  serverId?: string;
+}
+
+interface CallNotificationData extends BaseNotificationData {
+  type: 'call';
+  callId: string;
+  callerId: string;
+  recipientId: string;
+  action: 'initiated' | 'accepted' | 'rejected' | 'ended';
+  channelId?: string;
+  serverId?: string;
+}
+
+interface ChannelNotificationData extends BaseNotificationData {
+  type: 'channel';
+  channelId: string;
+  serverId: string;
+  channelName: string;
+  userId: string;
+  action: 'created' | 'deleted' | 'updated';
+}
+
+type NotificationData = MessageNotificationData | CallNotificationData | ChannelNotificationData;
 
 export class KafkaService {
   private kafka: Kafka;
@@ -61,7 +97,7 @@ export class KafkaService {
   }
 
   private createNotification(topic: string, value: any): Notification | null {
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     const createdAt = new Date();
 
     switch (topic) {
@@ -75,6 +111,7 @@ export class KafkaService {
           data: {
             messageId: value.messageId,
             senderId: value.senderId,
+            recipientId: value.recipientId,
             content: value.content,
             channelId: value.channelId,
             serverId: value.serverId
@@ -91,6 +128,8 @@ export class KafkaService {
           data: {
             callId: value.callId,
             callerId: value.callerId,
+            recipientId: value.recipientId,
+            action: value.action,
             channelId: value.channelId,
             serverId: value.serverId
           }
@@ -106,7 +145,9 @@ export class KafkaService {
           data: {
             channelId: value.channelId,
             serverId: value.serverId,
-            channelName: value.channelName
+            channelName: value.channelName,
+            userId: value.userId,
+            action: value.action
           }
         };
 
@@ -125,5 +166,47 @@ export class KafkaService {
       logger.error('Error disconnecting from Kafka:', error);
       throw error;
     }
+  }
+
+  private async handleMessageEvent(data: any): Promise<void> {
+    const notification: MessageNotificationData = {
+      type: 'message',
+      messageId: data.messageId,
+      senderId: data.senderId,
+      recipientId: data.recipientId,
+      content: data.content,
+      channelId: data.channelId,
+      serverId: data.serverId
+    };
+    await this.saveNotification(notification);
+  }
+
+  private async handleCallEvent(data: any): Promise<void> {
+    const notification: CallNotificationData = {
+      type: 'call',
+      callId: data.callId,
+      callerId: data.callerId,
+      recipientId: data.recipientId,
+      action: data.action || 'initiated',
+      channelId: data.channelId,
+      serverId: data.serverId
+    };
+    await this.saveNotification(notification);
+  }
+
+  private async handleChannelEvent(data: any): Promise<void> {
+    const notification: ChannelNotificationData = {
+      type: 'channel',
+      channelId: data.channelId,
+      serverId: data.serverId,
+      channelName: data.channelName,
+      userId: data.userId,
+      action: data.action || 'created'
+    };
+    await this.saveNotification(notification);
+  }
+
+  private async saveNotification(notification: NotificationData): Promise<void> {
+    // Implementation of saveNotification method
   }
 } 

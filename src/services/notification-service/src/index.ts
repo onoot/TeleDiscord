@@ -49,7 +49,13 @@ const PORT = process.env.PORT || 3000;
 async function bootstrap() {
   try {
     // Подключаемся к MongoDB
-    await mongoose.connect(config.mongodb.uri, config.mongodb.options);
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/notifications', {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      family: 4,
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    } as mongoose.ConnectOptions);
     console.log('Successfully connected to MongoDB');
 
     // Подключаемся к Kafka

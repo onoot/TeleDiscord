@@ -156,6 +156,203 @@ data:
                 application/json:
                   schema:
                     $ref: '#/components/schemas/UserProfile'
+      /api/v1/users/forgot-password:
+        post:
+          tags:
+            - Пользователи v1
+          summary: Запрос на восстановление пароля
+          description: Отправляет код восстановления на email пользователя
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - email
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                      description: Email пользователя
+          responses:
+            '200':
+              description: Код восстановления отправлен
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Инструкции по восстановлению пароля отправлены на ваш email"
+            '404':
+              description: Пользователь не найден
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      status:
+                        type: integer
+                        example: 404
+                      message:
+                        type: string
+                        example: "Пользователь с таким email не найден"
+      /api/v1/users/reset-password:
+        post:
+          tags:
+            - Пользователи v1
+          summary: Сброс пароля
+          description: Устанавливает новый пароль с использованием кода восстановления
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - email
+                    - code
+                    - newPassword
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                      description: Email пользователя
+                    code:
+                      type: string
+                      description: Код восстановления
+                    newPassword:
+                      type: string
+                      format: password
+                      minLength: 8
+                      description: Новый пароль
+          responses:
+            '200':
+              description: Пароль успешно изменен
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Пароль успешно изменен"
+            '400':
+              description: Неверный код восстановления
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      status:
+                        type: integer
+                        example: 400
+                      message:
+                        type: string
+                        example: "Код восстановления недействителен или истек"
+            '404':
+              description: Пользователь не найден
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      status:
+                        type: integer
+                        example: 404
+                      message:
+                        type: string
+                        example: "Пользователь с таким email не найден"
+      /api/v1/users/verify-email:
+        post:
+          tags:
+            - Пользователи v1
+          summary: Верификация email
+          description: Отправка и проверка кода верификации email
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - email
+                    - action
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                    action:
+                      type: integer
+                      enum: [1, 2]
+                      description: "1 - отправить код, 2 - проверить код"
+                    code:
+                      type: string
+                      description: "Код верификации (требуется только для action=2)"
+          responses:
+            '200':
+              description: Успешная операция
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+            '400':
+              description: Неверный запрос
+            '404':
+              description: Пользователь не найден
+            '500':
+              description: Ошибка сервера
+
+      /api/v1/users/password-recovery:
+        post:
+          tags:
+            - Пользователи v1
+          summary: Восстановление пароля
+          description: Отправка и проверка кода восстановления пароля
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - email
+                    - action
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                    action:
+                      type: integer
+                      enum: [1, 2]
+                      description: "1 - отправить код, 2 - сбросить пароль"
+                    code:
+                      type: string
+                      description: "Код восстановления (требуется только для action=2)"
+                    newPassword:
+                      type: string
+                      description: "Новый пароль (требуется только для action=2)"
+          responses:
+            '200':
+              description: Успешная операция
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+            '400':
+              description: Неверный запрос
+            '404':
+              description: Пользователь не найден
+            '500':
+              description: Ошибка сервера
     components:
       securitySchemes:
         BearerAuth:

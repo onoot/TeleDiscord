@@ -1,22 +1,23 @@
-FROM node:18-alpine AS builder
+# Этап сборки
+FROM node:18-alpine as builder
 
 WORKDIR /app
 
-# Устанавливаем необходимые пакеты для сборки
+# Устанавливаем необходимые системные зависимости
 RUN apk add --no-cache \
     python3 \
     make \
     g++
 
 # Копируем файлы package.json и tsconfig.json
-COPY src/services/call-service/package*.json src/services/call-service/tsconfig.json ./
+COPY package*.json ./
+COPY tsconfig.json ./
 
-# Устанавливаем все зависимости, включая devDependencies
+# Устанавливаем все зависимости
 RUN npm install
 
-# Копируем исходные файлы
-COPY src/services/call-service/src ./src
-COPY src/services/call-service/config ./config
+# Копируем исходный код
+COPY src ./src
 
 # Собираем TypeScript
 RUN npm run build
@@ -24,32 +25,28 @@ RUN npm run build
 # Начинаем новый этап сборки
 FROM node:18-alpine
 
-# Устанавливаем зависимости для bcrypt
+# Устанавливаем необходимые системные зависимости
 RUN apk add --no-cache \
     python3 \
     make \
     g++
 
-# Создаем пользователя node и устанавливаем права
+# Создаем пользователя node и настраиваем права
 RUN mkdir -p /app && chown -R node:node /app
-
-# Переключаемся на пользователя node
+WORKDIR /app
 USER node
 
-WORKDIR /app
-
-# Копируем package.json и package-lock.json
-COPY --chown=node:node src/services/call-service/package*.json ./
+# Копируем package.json
+COPY --chown=node:node package*.json ./
 
 # Устанавливаем только production зависимости
 RUN npm install --omit=dev
 
 # Копируем собранные файлы из предыдущего этапа
 COPY --chown=node:node --from=builder /app/dist ./dist
-COPY --chown=node:node --from=builder /app/config ./config
 
-# Открываем порты для HTTP и WebSocket
-EXPOSE 3000 3001
+# Определяем порт, который будет прослушивать приложение
+EXPOSE 3000
 
 # Запускаем приложение
-CMD ["node", "dist/src/index.js"] 
+CMD ["node", "dist/index.js"] 

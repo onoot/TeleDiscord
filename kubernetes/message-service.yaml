@@ -140,8 +140,4 @@ spec:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 80
-
-schema:
-  type: string
-  format: uuid 
+        averageUtilization: 80 
