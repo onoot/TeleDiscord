@@ -1,14 +1,18 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: traefik-ingress-controller
+  name: traefik
   namespace: messenger
+  labels:
+    app: traefik
 
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: traefik-ingress-controller
+  name: traefik
+  labels:
+    app: traefik
 rules:
   - apiGroups:
       - ""
@@ -42,14 +46,16 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: traefik-ingress-controller
+  name: traefik
+  labels:
+    app: traefik
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: traefik-ingress-controller
+  name: traefik
 subjects:
   - kind: ServiceAccount
-    name: traefik-ingress-controller
+    name: traefik
     namespace: messenger
 
 ---
@@ -58,17 +64,20 @@ kind: Service
 metadata:
   name: traefik
   namespace: messenger
+  labels:
+    app: traefik
 spec:
   type: LoadBalancer
   ports:
-    - protocol: TCP
-      name: web
+    - name: web
       port: 80
-      targetPort: 80
-    - protocol: TCP
-      name: admin
+      targetPort: web
+    - name: websecure
+      port: 443
+      targetPort: websecure
+    - name: admin
       port: 8080
-      targetPort: 8080
+      targetPort: admin
   selector:
     app: traefik
 
@@ -90,16 +99,10 @@ spec:
       labels:
         app: traefik
     spec:
-      serviceAccountName: traefik-ingress-controller
+      serviceAccountName: traefik
       containers:
         - name: traefik
           image: traefik:v2.10
-          args:
-            - --api.insecure=true
-            - --providers.kubernetesingress
-            - --entrypoints.web.address=:80
-            - --entrypoints.websecure.address=:443
-            - --log.level=INFO
           ports:
             - name: web
               containerPort: 80
@@ -107,24 +110,38 @@ spec:
               containerPort: 443
             - name: admin
               containerPort: 8080
-          securityContext:
-            capabilities:
-              drop:
-              - ALL
-              add:
-              - NET_BIND_SERVICE
+          args:
+            - --api.insecure=true
+            - --providers.kubernetesingress
+            - --entrypoints.web.address=:80
+            - --entrypoints.websecure.address=:443
+            - --log.level=INFO
           resources:
-            limits:
-              cpu: 200m
-              memory: 256Mi
             requests:
               cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: admin
+            initialDelaySeconds: 15
+            periodSeconds: 20
 
 ---
 apiVersion: networking.k8s.io/v1
 kind: IngressClass
 metadata:
   name: traefik
+  labels:
+    app: traefik
 spec:
   controller: traefik.io/ingress-controller 
