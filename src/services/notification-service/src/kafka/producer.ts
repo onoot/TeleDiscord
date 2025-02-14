@@ -22,7 +22,7 @@ export class KafkaProducer {
       throw error;
     }
   }
-
+// не
   async sendCallNotification(call: Call): Promise<void> {
     try {
       await this.producer.send({
