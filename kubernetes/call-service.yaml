@@ -24,10 +24,12 @@ spec:
         prometheus.io/port: "3000"
         prometheus.io/path: "/metrics"
     spec:
+      imagePullSecrets:
+      - name: gcr-json-key
       containers:
       - name: call-service
-        image: docer2-call-service:latest
-        imagePullPolicy: Never
+        image: gcr.io/teleport-450320/call-service:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           name: http
