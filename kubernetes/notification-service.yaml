@@ -39,10 +39,12 @@ spec:
         prometheus.io/port: "3000"
         prometheus.io/path: "/metrics"
     spec:
+      imagePullSecrets:
+      - name: gcr-json-key
       containers:
       - name: notification-service
-        image: docer2-notification-service:latest
-        imagePullPolicy: IfNotPresent
+        image: gcr.io/teleport-450320/notification-service:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           name: http
