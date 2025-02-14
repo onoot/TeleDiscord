@@ -31,8 +31,8 @@ export interface Call {
   };
 }
 
-export default {
+// Экспортируем только перечисления как значения
+export const CallEnums = {
   CallType,
-  CallStatus,
-  Call
+  CallStatus
 };
